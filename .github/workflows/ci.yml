@@ -25,8 +25,14 @@ jobs:
           cache: 'npm'
 
       # 루트 설치(모노레포 루트에 devDeps 있는 경우)
-      - name: Install root deps
-        run: npm ci
+      - name: Install deps (root)
+        run: npm install --no-audit --no-fund
+
+      - name: Install deps (web)
+        run: npm --prefix apps/web install --no-audit --no-fund
+
+      - name: Install deps (api)
+        run: npm --prefix apps/api install --no-audit --no-fund
 
       # 웹 설치 & 빌드 (Vite)
       - name: Install web deps
