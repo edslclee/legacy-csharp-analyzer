@@ -1,0 +1,7 @@
+/* apps/web/src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 안전장치: Tailwind가 깨져도 텍스트 보이게 */
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }

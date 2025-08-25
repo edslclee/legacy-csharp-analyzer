@@ -1,0 +1,24 @@
+{
+  "name": "legacy-csharp-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo for Legacy C# Analyzer prototype (web + api)",
+  "scripts": {
+    "dev:web": "npm --prefix apps/web run dev",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev": "concurrently -k -n WEB,API -c blue,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "build": "npm --prefix apps/web run build && npm --prefix apps/api run build",
+    "lint": "echo \"(선택) eslint/prettier 구성 가능\"",
+    "clean": "rm -rf node_modules apps/web/node_modules apps/api/node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "tsx": "^4.20.5",
+    "undici": "^7.15.0",
+    "yaml": "^2.8.1"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ]
+}
