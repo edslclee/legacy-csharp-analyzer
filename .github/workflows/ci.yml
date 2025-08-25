@@ -1,50 +1,49 @@
-name: CI
+name: CI / Build & Test (web+api)
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
-
-permissions:
-  contents: read
+  push:
+    branches: [ feat/**, fix/**, chore/** ]
 
 jobs:
-  build_test:
-    name: Build & Test (web+api)
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: 'npm'
 
-      # 루트 설치(모노레포 루트에 devDeps 있는 경우)
+      # 루트: lockfile 싱크 안 맞으면 ci가 실패하므로 install 사용
       - name: Install deps (root)
         run: npm install --no-audit --no-fund
 
+      # 각 앱: lockfile이 없으므로 install 사용 (ci 금지)
       - name: Install deps (web)
         run: npm --prefix apps/web install --no-audit --no-fund
 
       - name: Install deps (api)
         run: npm --prefix apps/api install --no-audit --no-fund
 
-      # 웹 설치 & 빌드 (Vite)
-      - name: Install web deps
-        run: npm --prefix apps/web ci
+      # 타입체크
+      - name: Typecheck web
+        run: npm --prefix apps/web run typecheck --if-present
+
+      - name: Typecheck api
+        run: npm --prefix apps/api run typecheck --if-present
+
+      # 빌드
       - name: Build web
         run: npm --prefix apps/web run build
 
-      # API 설치 & 타입체크 (tsc)
-      - name: Install api deps
-        run: npm --prefix apps/api ci
-      - name: TypeCheck api
-        run: npx tsc -p apps/api/tsconfig.json --noEmit
+      - name: Build api
+        run: npm --prefix apps/api run build
 
       # (선택) 산출물 업로드
       - name: Upload web dist
@@ -53,4 +52,10 @@ jobs:
         with:
           name: web-dist
           path: apps/web/dist
-          if-no-files-found: ignore
+
+      - name: Upload api dist
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-dist
+          path: apps/api/dist
