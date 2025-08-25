@@ -1,0 +1,10 @@
+CREATE TABLE Users (
+  Id INT PRIMARY KEY,
+  Name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE Orders (
+  Id INT PRIMARY KEY,
+  UserId INT,
+  FOREIGN KEY (UserId) REFERENCES Users(Id)
+);

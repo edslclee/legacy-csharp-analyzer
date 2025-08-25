@@ -2,3 +2,4 @@ node_modules
 .env
 apps/api/.env
 apps/web/dist
+samples/project.zip
