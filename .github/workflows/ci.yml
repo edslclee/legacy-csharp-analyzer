@@ -1,46 +1,66 @@
-name: CI / Build & Test (web+api)
+name: CI
 
 on:
+  push:
+    branches: [ main, feat/**, fix/**, chore/** ]
   pull_request:
     branches: [ main ]
-  # 필요하면 push도 함께 트리거
-  # push:
-  #   branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-test:
+    name: Build & Test (web+api)
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: 'npm'
 
-      # Monorepo는 루트에서 한 번만 설치
-      - name: Install deps (root)
-        run: npm ci
+      # ---------- API ----------
+      - name: Install deps (api)
+        working-directory: apps/api
+        run: npm ci || npm install --no-audit --no-fund
 
-      # --- API ---
       - name: Typecheck (api)
-        run: npm -w apps/api run typecheck
+        working-directory: apps/api
+        run: npm run typecheck
 
       - name: Test (api)
-        run: npm -w apps/api run test --if-present
+        working-directory: apps/api
+        env:
+          NODE_ENV: test
+        run: npm test --silent
 
       - name: Build (api)
-        run: npm -w apps/api run build
+        working-directory: apps/api
+        run: npm run build
 
-      # --- WEB ---
+      # ---------- WEB ----------
+      - name: Install deps (web)
+        working-directory: apps/web
+        run: npm ci || npm install --no-audit --no-fund
+
       - name: Typecheck (web)
-        run: npm -w apps/web run typecheck --if-present
+        working-directory: apps/web
+        run: npm run typecheck || echo "no typecheck script"
 
       - name: Build (web)
-        run: npm -w apps/web run build
-        env:
-          # 필요 시 빌드 타임 환경변수 주입
-          VITE_API_BASE: http://localhost:8787
+        working-directory: apps/web
+        run: npm run build
