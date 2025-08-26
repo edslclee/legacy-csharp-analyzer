@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/errorboundary.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/tabs.tsx","./src/lib/api.ts","./src/lib/erd.ts","./src/lib/erdgen.ts","./src/lib/exporters-doc.ts","./src/lib/exporters.ts","./src/lib/fileingest.ts","./src/lib/mermaid.ts","./vite.config.ts","./tsconfig.app.json","./tsconfig.node.json"],"version":"5.8.3"}

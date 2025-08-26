@@ -1,28 +1,22 @@
 import React from 'react'
 
-type Props = { children: React.ReactNode }
-type State = { hasError: boolean; error?: Error }
+type EBProps = { children: React.ReactNode }
+type EBState = { error: any }
 
-export class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
+export class ErrorBoundary extends React.Component<EBProps, EBState> {
+  constructor(props: EBProps) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { error: null }
   }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error }
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, info)
-  }
-
+  static getDerivedStateFromError(error: any): EBState { return { error } }
+  componentDidCatch(error: any, info: any) { console.error('Render error:', error, info) }
   render() {
-    if (this.state.hasError) {
+    if (this.state.error) {
       return (
-        <div className="p-4 bg-red-100 text-red-800">
-          <h2>Something went wrong.</h2>
-          <pre>{this.state.error?.message}</pre>
+        <div className="m-4 p-4 border border-red-300 rounded bg-red-50 text-red-700">
+          <div className="font-semibold">렌더 중 오류가 발생했습니다.</div>
+          <pre className="text-xs overflow-auto">{String(this.state.error?.stack || this.state.error)}</pre>
+          <button className="mt-2 px-3 py-1 rounded border" onClick={()=>location.reload()}>새로고침</button>
         </div>
       )
     }

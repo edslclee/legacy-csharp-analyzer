@@ -1,53 +1,113 @@
-import type { AnalysisResult, Table } from '../types'
+// apps/web/src/lib/exporters.ts
+import type { AnalysisResult } from '../types'
 
-function downloadBlob(data: Blob, filename: string) {
-  const url = URL.createObjectURL(data)
-  const a = Object.assign(document.createElement('a'), { href: url, download: filename })
+// ---------- 공통 유틸 ----------
+const S = (v: unknown): string => (v == null ? '' : String(v))
+
+function saveBlob(blob: Blob, filename: string) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  a.style.display = 'none'
+  document.body.appendChild(a)
   a.click()
+  document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
 
-export function downloadJSON(obj: unknown, filename: string) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' })
-  downloadBlob(blob, filename)
+function csvEscape(v: unknown): string {
+  let s = S(v)
+  // 양끝 공백, 줄바꿈, 콤마, 따옴표 포함 시 인용 + 내부 따옴표 이스케이프
+  if (/^\s|\s$/.test(s) || /[",\r\n]/.test(s)) {
+    s = `"${s.replace(/"/g, '""')}"`
+  }
+  return s
 }
 
-export function downloadText(text: string, filename: string) {
-  const blob = new Blob([text], { type: 'text/plain' })
-  downloadBlob(blob, filename)
+function rowsToCSV(rows: Array<Array<unknown>>): string {
+  const headerBOM = '\ufeff' // Excel 호환을 위한 UTF-8 BOM
+  const body = rows.map(r => r.map(csvEscape).join(',')).join('\r\n')
+  return headerBOM + body + '\r\n'
 }
 
-export function downloadTablesCSV(tables: Table[], filename = 'tables.csv') {
-  const lines = ['table,column,type,pk,fk,nullable']
-  tables.forEach(t => {
-    t.columns.forEach(c => {
-      lines.push([
-        t.name,
-        c.name,
-        c.type ?? '',
-        c.pk ? 'Y' : '',
-        c.fk ? `${c.fk.table}.${c.fk.column}` : '',
-        c.nullable === false ? 'N' : ''
-      ].join(','))
-    })
-  })
-  downloadText(lines.join('\n'), filename)
+// ---------- 텍스트 / JSON 다운로드 ----------
+export function downloadText(text: string, filename = 'export.txt') {
+  const blob = new Blob([S(text)], { type: 'text/plain;charset=utf-8' })
+  saveBlob(blob, filename)
 }
 
-export function downloadCrudCSV(rows: AnalysisResult['crud_matrix'], filename = 'crud.csv') {
-  const lines = ['process,table,ops']
-  rows.forEach(r => {
-    lines.push([r.process, r.table, r.ops.join('')].join(','))
-  })
-  downloadText(lines.join('\n'), filename)
+export function downloadJSON(data: unknown, filename = 'export.json') {
+  const json = JSON.stringify(data, null, 2)
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+  saveBlob(blob, filename)
 }
 
-export function downloadDocLinksCSV(rows: AnalysisResult['doc_links'], filename = 'doc_links.csv') {
-  const header = ['doc','snippet','related']
-  const escape = (s: string) => `"${(s||'').replace(/"/g,'""')}"`
-  const lines = [header.join(',')]
-  rows.forEach(r => {
-    lines.push([escape(r.doc), escape(r.snippet), escape(r.related)].join(','))
-  })
-  downloadText(lines.join('\n'), filename)
+// ---------- CSV: Tables ----------
+export function downloadTablesCSV(tables: AnalysisResult['tables'] | undefined, filename = 'tables.csv') {
+  const rows: Array<Array<unknown>> = []
+  rows.push(['table', 'column', 'type', 'pk', 'nullable', 'fk_table', 'fk_column'])
+
+  if (tables?.length) {
+    for (const t of tables) {
+      const cols = t.columns ?? []
+      if (cols.length === 0) {
+        rows.push([t.name, '', '', '', '', '', ''])
+        continue
+      }
+      for (const c of cols) {
+        rows.push([
+          t.name,
+          c.name ?? '',
+          c.type ?? '',
+          c.pk ? 'Y' : '',
+          c.nullable === false ? 'NO' : (c.nullable === true ? 'YES' : ''),
+          c.fk?.table ?? '',
+          c.fk?.column ?? ''
+        ])
+      }
+    }
+  }
+
+  const csv = rowsToCSV(rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  saveBlob(blob, filename)
+}
+
+// ---------- CSV: CRUD Matrix ----------
+export function downloadCrudCSV(crud: AnalysisResult['crud_matrix'] | undefined, filename = 'crud.csv') {
+  const rows: Array<Array<unknown>> = []
+  rows.push(['process', 'table', 'ops'])
+
+  if (crud?.length) {
+    for (const r of crud) {
+      rows.push([
+        r.process ?? '',
+        r.table ?? '',
+        Array.isArray(r.ops) ? r.ops.join('') : ''
+      ])
+    }
+  }
+
+  const csv = rowsToCSV(rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  saveBlob(blob, filename)
+}
+
+// ---------- CSV: Document Links ----------
+export function downloadDocLinksCSV(docLinks: AnalysisResult['doc_links'] | undefined, filename = 'doc_links.csv') {
+  const rows: Array<Array<unknown>> = []
+  rows.push(['doc', 'snippet', 'related'])
+
+  if (docLinks?.length) {
+    for (const d of docLinks) {
+      rows.push([d.doc ?? '', d.snippet ?? '', d.related ?? ''])
+    }
+  }
+
+  const csv = rowsToCSV(rows)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  saveBlob(blob, filename)
 }

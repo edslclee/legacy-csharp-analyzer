@@ -1,37 +1,41 @@
 // apps/web/src/main.tsx
 import React from 'react'
-import ReactDOM from 'react-dom/client'
+import { createRoot } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ErrorBoundary as RootErrorBoundary } from './ErrorBoundary'
 import App from './App'
+import './App.css'
 import './index.css'
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+// React Query 클라이언트 (기본 옵션 약하게 설정)
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+  },
+})
 
-// 간단한 전역 ErrorBoundary (초기 렌더 에러도 포착)
-class RootErrorBoundary extends React.Component<{children: React.ReactNode}, {error?: any}> {
-  constructor(props:any){ super(props); this.state = { error: undefined } }
-  static getDerivedStateFromError(error:any){ return { error } }
-  componentDidCatch(err:any, info:any){ console.error('Root boundary:', err, info) }
-  render(){
-    if (this.state.error) {
-      return (
-        <div style={{padding:16, background:'#fee', color:'#900', whiteSpace:'pre-wrap'}}>
-          <b>App crashed during render.</b>
-          {'\n'}{String(this.state.error?.stack || this.state.error)}
-        </div>
-      )
-    }
-    return this.props.children
-  }
+// #root 엘리먼트 필수 (index.html에 있어야 함)
+const container = document.getElementById('root')
+if (!container) {
+  throw new Error('Root element (#root) not found in index.html')
 }
 
-const qc = new QueryClient()
+const root = createRoot(container)
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+root.render(
   <React.StrictMode>
-    <RootErrorBoundary>
-      <QueryClientProvider client={qc}>
+    <QueryClientProvider client={queryClient}>
+      <RootErrorBoundary>
         <App />
-      </QueryClientProvider>
-    </RootErrorBoundary>
+      </RootErrorBoundary>
+    </QueryClientProvider>
   </React.StrictMode>
 )
+
+// 디버깅 편의: 브라우저 콘솔에서 window.queryClient 사용 가능
+// @ts-expect-error - dev helper
+window.queryClient = queryClient

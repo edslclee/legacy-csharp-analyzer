@@ -7,8 +7,7 @@ import { Tabs } from './components/Tabs'
 import type { TabKey } from './components/Tabs'
 import type { AnalysisResult, Ingested } from './types'
 import { downloadJSON, downloadTablesCSV, downloadCrudCSV, downloadDocLinksCSV, downloadText } from './lib/exporters'
-import { renderMermaid, exportSvgToPng, getSvgPngDataUrl } from './lib/mermaid'
-import { exportDocx, exportPdf } from './lib/exporters-doc'
+import { buildMermaidERD, isLikelyValidMermaid } from './lib/erd'
 
 /** ===== Error Boundary: 렌더 예외를 UI로 보여줌 ===== */
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error: any}> {
@@ -16,15 +15,19 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {error:
   static getDerivedStateFromError(error:any){ return { error } }
   componentDidCatch(error:any, info:any){ console.error('Render error:', error, info) }
   render(){
+    // @ts-ignore
     if (this.state.error) {
+      // @ts-ignore
+      const err = this.state.error
       return (
         <div className="m-4 p-4 border border-red-300 rounded bg-red-50 text-red-700">
           <div className="font-semibold">렌더 중 오류가 발생했습니다.</div>
-          <pre className="text-xs overflow-auto">{String(this.state.error?.stack || this.state.error)}</pre>
+          <pre className="text-xs overflow-auto">{String(err?.stack || err)}</pre>
           <button className="mt-2 px-3 py-1 rounded border" onClick={()=>location.reload()}>새로고침</button>
         </div>
       )
     }
+    // @ts-ignore
     return this.props.children
   }
 }
@@ -40,7 +43,6 @@ function SafeMermaid({ code }: { code: string }) {
       setErr(null)
       try {
         if (!code?.trim()) return
-        // 동적 import (SSR/빌드 타이밍 이슈 회피)
         const mermaid = (await import('mermaid')).default
         mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' })
         const id = 'erd-' + Math.random().toString(36).slice(2)
@@ -96,12 +98,20 @@ export default function App() {
   const disabled = useMemo(() => srcFiles.length === 0 && !useMock, [srcFiles.length, useMock])
   const approxBytes = useMemo(() => estimateBytes(payloadPreview), [payloadPreview])
 
+  // === ERD 코드 선택: 서버 코드가 유효하지 않으면 테이블 기반 대체 코드 사용 ===
+  const erdCode = useMemo(() => {
+    if (!result) return ''
+    return isLikelyValidMermaid(result.erd_mermaid)
+      ? String(result.erd_mermaid)
+      : buildMermaidERD(result.tables || [])
+  }, [result])
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen p-6 space-y-6">
         <header className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">As-Is Navigator (Prototype)</h1>
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-zinc-600">
             API: <span className="font-mono">{healthInfo?.model ?? '...'}</span>
           </div>
         </header>
@@ -111,21 +121,21 @@ export default function App() {
           <div className="border rounded-xl p-4 bg-white">
             <h2 className="font-semibold mb-2">Source / Schema (.cs, .sql, .zip)</h2>
             <input type="file" multiple onChange={(e)=> setSrcFiles(Array.from(e.target.files||[]))}/>
-            <p className="text-xs text-gray-500 mt-1">* Zip 내부 .cs/.sql만 추출. 총 5MB 제한(서버 검증).</p>
-            {srcFiles.length>0 && <p className="text-xs text-gray-700 mt-2">선택: {srcFiles.map(f=>f.name).join(', ')}</p>}
+            <p className="text-xs text-zinc-500 mt-1">* Zip 내부 .cs/.sql만 추출. 총 5MB 제한(서버 검증).</p>
+            {srcFiles.length>0 && <p className="text-xs text-zinc-700 mt-2">선택: {srcFiles.map(f=>f.name).join(', ')}</p>}
           </div>
           <div className="border rounded-xl p-4 bg-white">
             <h2 className="font-semibold mb-2">Documentation (txt 권장)</h2>
             <input type="file" multiple onChange={(e)=> setDocFiles(Array.from(e.target.files||[]))}/>
-            <p className="text-xs text-gray-500 mt-1">* PDF/DOCX는 후속 Iteration에서 텍스트 추출 지원 예정.</p>
-            {docFiles.length>0 && <p className="text-xs text-gray-700 mt-2">선택: {docFiles.map(f=>f.name).join(', ')}</p>}
+            <p className="text-xs text-zinc-500 mt-1">* PDF/DOCX는 후속 Iteration에서 텍스트 추출 지원 예정.</p>
+            {docFiles.length>0 && <p className="text-xs text-zinc-700 mt-2">선택: {docFiles.map(f=>f.name).join(', ')}</p>}
           </div>
         </section>
 
         {/* 제어 버튼들 */}
         <div className="flex flex-wrap items-center gap-3">
           <button
-            className="px-4 py-2 rounded-xl bg-black text-white disabled:bg-gray-400"
+            className="px-4 py-2 rounded-xl bg-black text-white disabled:bg-zinc-400"
             disabled={disabled || isPending}
             onClick={()=> mutate()}
           >
@@ -138,7 +148,7 @@ export default function App() {
           </label>
 
           {payloadPreview.length>0 && (
-            <span className="text-xs text-gray-600">
+            <span className="text-xs text-zinc-600">
               payload ~ {Math.ceil(approxBytes/1024)} KB
             </span>
           )}
@@ -156,32 +166,22 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-3">
               <Tabs active={tab} onChange={setTab} />
 
+              {/* 다운로드 버튼들 */}
               <div className="ml-auto flex flex-wrap gap-2">
                 <button
                   className="px-3 py-1 rounded border"
                   onClick={()=> downloadJSON(result, 'result.json')}
                 >Download result.json</button>
-                <button
-                  className="px-3 py-1 rounded border"
-                  onClick={async ()=>{
-                    const erd = erdRef.current ? await getSvgPngDataUrl(erdRef.current) : null
-                    await exportDocx(result, { erdPngDataUrl: erd || undefined })
-                  }}
-                >Export DOCX</button>
-
-                <button
-                  className="px-3 py-1 rounded border"
-                  onClick={async ()=>{
-                    const erd = erdRef.current ? await getSvgPngDataUrl(erdRef.current) : null
-                    await exportPdf(result, { erdPngDataUrl: erd || undefined })
-                  }}
-                >Export PDF</button>
 
                 {tab === 'ERD' && (
                   <>
                     <button
                       className="px-3 py-1 rounded border"
-                      onClick={()=> downloadText(result.erd_mermaid || '', 'erd.mmd')}
+                      onClick={()=>{
+                        // 화면에 사용하는 것과 동일한 코드로 내보내기
+                        const codeForDownload = erdCode || ''
+                        downloadText(codeForDownload, 'erd.mmd')
+                      }}
                     >Export Mermaid</button>
                   </>
                 )}
@@ -201,7 +201,7 @@ export default function App() {
             </div>
 
             {/* 탭 내용 (필드가 없거나 빈 배열이어도 안전 렌더) */}
-            {tab==='ERD' && <SafeMermaid code={String(result.erd_mermaid || '')} />}
+            {tab==='ERD' && <SafeMermaid code={erdCode} />}
 
             {tab==='TABLES' && (
               <div className="border rounded-xl p-4 bg-white overflow-auto">
@@ -258,11 +258,11 @@ export default function App() {
                   {(result.processes || []).map(p=>(
                     <li key={p.name} className="mb-2">
                       <span className="font-medium">{p.name}</span> — {p.description||''}
-                      {p.children?.length ? <div className="text-xs text-gray-600">children: {p.children.join(' > ')}</div> : null}
+                      {p.children?.length ? <div className="text-xs text-zinc-600">children: {p.children.join(' > ')}</div> : null}
                     </li>
                   ))}
                   {(!result.processes || result.processes.length===0) && (
-                    <li className="text-sm text-gray-600">표시할 프로세스가 없습니다.</li>
+                    <li className="text-sm text-zinc-600">표시할 프로세스가 없습니다.</li>
                   )}
                 </ul>
               </div>
@@ -275,18 +275,18 @@ export default function App() {
                     <li key={i} className="mb-1"><b>{d.doc}</b>: “{d.snippet}” → {d.related}</li>
                   ))}
                   {(!result.doc_links || result.doc_links.length===0) && (
-                    <li className="text-sm text-gray-600">문서 매핑 결과가 없습니다.</li>
+                    <li className="text-sm text-zinc-600">문서 매핑 결과가 없습니다.</li>
                   )}
                 </ul>
               </div>
             )}
 
-            <footer className="text-xs text-gray-500 pt-2">Generated by As-Is Navigator</footer>
+            <footer className="text-xs text-zinc-500 pt-2">Generated by As-Is Navigator</footer>
           </section>
         )}
 
         {!result && !isPending && !error && (
-          <p className="text-sm text-gray-600">파일을 업로드하고 “Start Analysis”를 눌러 결과를 확인하세요.</p>
+          <p className="text-sm text-zinc-600">파일을 업로드하고 “Start Analysis”를 눌러 결과를 확인하세요.</p>
         )}
       </div>
     </ErrorBoundary>
