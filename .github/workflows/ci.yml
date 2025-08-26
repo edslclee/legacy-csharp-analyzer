@@ -1,50 +1,46 @@
-name: CI
+name: CI / Build & Test (web+api)
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
-
-permissions:
-  contents: read
+  # 필요하면 push도 함께 트리거
+  # push:
+  #   branches: [ main ]
 
 jobs:
-  build_test:
-    name: Build & Test (web+api)
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      # 루트 설치(모노레포 루트에 devDeps 있는 경우)
-      - name: Install root deps
+      # Monorepo는 루트에서 한 번만 설치
+      - name: Install deps (root)
         run: npm ci
 
-      # 웹 설치 & 빌드 (Vite)
-      - name: Install web deps
-        run: npm --prefix apps/web ci
-      - name: Build web
-        run: npm --prefix apps/web run build
+      # --- API ---
+      - name: Typecheck (api)
+        run: npm -w apps/api run typecheck
 
-      # API 설치 & 타입체크 (tsc)
-      - name: Install api deps
-        run: npm --prefix apps/api ci
-      - name: TypeCheck api
-        run: npx tsc -p apps/api/tsconfig.json --noEmit
+      - name: Test (api)
+        run: npm -w apps/api run test --if-present
 
-      # (선택) 산출물 업로드
-      - name: Upload web dist
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: apps/web/dist
-          if-no-files-found: ignore
+      - name: Build (api)
+        run: npm -w apps/api run build
+
+      # --- WEB ---
+      - name: Typecheck (web)
+        run: npm -w apps/web run typecheck --if-present
+
+      - name: Build (web)
+        run: npm -w apps/web run build
+        env:
+          # 필요 시 빌드 타임 환경변수 주입
+          VITE_API_BASE: http://localhost:8787
