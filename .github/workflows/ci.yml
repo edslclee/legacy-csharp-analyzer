@@ -43,7 +43,7 @@ jobs:
       # (선택) 산출물 업로드
       - name: Upload web dist
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-dist
           path: apps/web/dist
